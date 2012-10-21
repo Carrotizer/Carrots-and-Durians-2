@@ -6,5 +6,6 @@
 <pydev_property name="org.python.pydev.PYTHON_PROJECT_VERSION">python 2.7</pydev_property>
 <pydev_pathproperty name="org.python.pydev.PROJECT_SOURCE_PATH">
 <path>/EE122 Project 2 - Routing Protocols/src</path>
+<path>/EE122 Project 2 - Routing Protocols</path>
 </pydev_pathproperty>
 </pydev_project>
