@@ -70,7 +70,8 @@ class RIPRouter (Entity):
             #link down case
             else:
                 del(self.neighbor_paths[packet.src])
-                     
+                del(self.paths[packet.src])
+                del(self.forwarding_table[packet.src])    
                 # Find new min distance and proper port
                 # We need to recalculate everything from what we have.  
                 # This is why we need RoutingUpdates' information stored
