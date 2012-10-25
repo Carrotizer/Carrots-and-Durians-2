@@ -1,0 +1,45 @@
+Metrics:
+1. Hop count
+2. Latencies
+3. Packet loss/corruption rate
+
+Reasons for choosing each metric:
+1. Hop count:
+If each 
+
+Also, if each "hop" has a nontrivial overhead (or some other penalty), then it may be better to choose
+2. Latencies:
+If link latencies are high
+If there are some links with especially high latencies, then it would be the best to avoid these links and take a detour instead
+
+3. Packet loss/corruption rate
+If the probability of a packet being dropped/corrupted is significant between each hop, 
+then it may be the best choice to 
+
+
+Network graph:
+h1-- s1 -- s2 -- s3 --  h2 
+  \_  s4 -----s5---- s6_/ 
+  \				       /
+   \_  s7 _______ s8 _/
+    
+Latency table:
+
+
+s7 - s8:
+
+Every other link has negligible latency, for simplicity
+
+
+Packet loss/corruption rate:
+s1 - s2: 
+s2 - s3:
+
+
+Everything else sends correctly 100% of the time, for simplicity
+  
+    
+Best path between h1 and h2
+-By hop count: h1 -> s7 -> s8 -> h2
+-By latencies:
+-By packet loss/corruption rate

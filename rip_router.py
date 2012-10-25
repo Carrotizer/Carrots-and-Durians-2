@@ -21,8 +21,6 @@ class RIPRouter (Entity):
     """
     
     def __init__(self):
-        # By spec, we need to have a paths variable.
-        self.routingUpdates_map = {}
 
         #dictionary that maps from:
         #    K: destination
@@ -35,21 +33,12 @@ class RIPRouter (Entity):
         #    to 
         #    V: min hop path distance in forwarding table
         self.paths = {}
-        # ABOVE SHOULD BE NAMED PATHS VIA SPEC
-        # UNLESS SPEC HAS A TYPO
-        # IN WHICH CASE IT'S WTF
         
         #dictionary that maps from: 
         #    K: neighbor  
         #    to 
         #    V: a DICTIONARY of destinations reachable by that port
         self.neighbors_distances = {}
-        
-
-        #TODO:
-        # -poisoned reverse
-        #should router info be erased when it goes down and comes back up?
-        #right now it does, not sure if that is correct
         
     def handle_rx (self, packet, port):
         # Add your code here!
@@ -69,7 +58,7 @@ class RIPRouter (Entity):
                 
             #link down case
             else:
-                del(self.neighbor_paths[packet.src])
+                del(self.neighbors_distances[packet.src])
                 del(self.paths[packet.src])
                 del(self.forwarding_table[packet.src])    
                 # Find new min distance and proper port
@@ -90,46 +79,16 @@ class RIPRouter (Entity):
             self.neighbors_distances[packet.src] = tempMap 
             self.recalculateMinDist()
             
-            """
-            dests = packet.all_dests();
-            for dest in dests:
-                #add destination to set of dests reachable by that port
-                self.neighbor_paths[port].add(dest)
-                dist = packet.get_distance(dest)
-                #update forwarding table
-                try:
-                    self.forwarding_table[dest][port] = dist+1
-                except KeyError:
-                    self.forwarding_table[dest] = {}
-                    self.forwarding_table[dest][port] = dist+1
-                
-                #update min dist table
-                self.resetMinDist(dest)
-            
-            
-            #implicit withdrawl:
-            for dest in self.neighbor_paths[port]:
-                #if the destination isn't in the lastest update
-                if not dest in dests:
-                    #remove it from everything
-                    self.neighbor_paths[port].remove(dest)
-                    dist = self.forwarding_table[dest][port]
-                    del(self.forwarding_table[dest][port])
-                    
-                    #reset our minimum table in case we lost the cheapest path
-                    if(dist == self.min_dist_table[dest]): 
-                        self.resetMinDist(dest)
-            """
-                     
             #send updates
-            self.send_RoutingUpdates(self.neighbors_distances.keys())    
+            self.send_RoutingUpdates(self.neighbors_distances.keys())
         else:
             # FORWARD THE PACKET CORRECTLY
             
             if packet.dst in self.forwarding_table:
                 self.send(packet, self.forwarding_table[packet.dst])
             else:
-                print("WTF")
+                if self.DEBUG:
+                    print "Dropping packet from %s" % packet.src
                 pass
                 
             """
@@ -153,7 +112,9 @@ class RIPRouter (Entity):
                     self.forwarding_table[dest] = self.forwarding_table[neighbor]       
                 elif distFromSelf == self.paths[dest]:
                     # Break ties by lower port ID
-                    self.forwarding_table[dest] = min(self.forwarding_table[dest], self.forwarding_table[neighbor])
+                    current_port = self.forwarding_table[dest]
+                    new_port = self.forwarding_table[neighbor]
+                    self.forwarding_table[dest] = min(current_port, new_port)
     
     
     #iterates over the forwarding table for a particular destination and reset the minum.  
@@ -178,13 +139,18 @@ class RIPRouter (Entity):
     # NOTE: Please don't advertise a neighbor to himself, 
     # i.e. if A is connected to B, please don't include B in A's update to B.
     def send_RoutingUpdates(self, neighbors):
-        
         # Because of the above constraint, we need to make each a routing update for
+        # POISON REVERSE:
+        # IF BEST ROUTE TO X IS THROUGH N
+        # ADVERTISE X:100 TO N
         for neighbor in neighbors:
             newRoutingUpdate = RoutingUpdate()                
             for dest in self.paths.keys():
                 if dest != neighbor:
-                    newRoutingUpdate.add_destination(dest, self.paths[dest])
+                    if self.forwarding_table[dest] == self.forwarding_table[neighbor]:   
+                        newRoutingUpdate.add_destination(dest, 100)
+                    else:
+                        newRoutingUpdate.add_destination(dest, self.paths[dest])
         
             self.send(newRoutingUpdate, self.forwarding_table[neighbor])
             if self.DEBUG:
