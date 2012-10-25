@@ -8,7 +8,7 @@ Create your RIP router in this file.
 class RIPRouter (Entity):
     INFINITY = 100
     
-    DEBUG = True
+    DEBUG = False
     
     
     """
@@ -64,23 +64,29 @@ class RIPRouter (Entity):
                 # Find new min distance and proper port
                 # We need to recalculate everything from what we have.  
                 # This is why we need RoutingUpdates' information stored
-            self.recalculateMinDist()
-                            
-            # Send routing update IF THE ROUTING TABLE CHANGED
-            self.send_RoutingUpdates(self.neighbors_distances.keys())
             
+            # Send routing update IF THE ROUTING TABLE CHANGED
+            if self.recalculateMinDist():
+                if self.DEBUG:
+                    print "||||| SENDING RoutingUpdates for DiscoveryPacket from %s |||||" % (packet.src)
+                self.send_RoutingUpdates()
+
         elif isinstance(packet, RoutingUpdate):
             #TODO: handle Split horizon with poisoned reverse
-            
             tempMap = {}
             for dest in packet.all_dests():
                 tempMap[dest] = packet.get_distance(dest)
             
-            self.neighbors_distances[packet.src] = tempMap 
-            self.recalculateMinDist()
+            if self.DEBUG:
+                print "######## Received a RoutingUpdate %s from SRC: %s" % (tempMap, packet.src)
             
-            #send updates
-            self.send_RoutingUpdates(self.neighbors_distances.keys())
+            self.neighbors_distances[packet.src] = tempMap 
+            
+            # Send routing update IF THE ROUTING TABLE CHANGED
+            if self.recalculateMinDist():
+                if self.DEBUG:
+                    print "||||| SENDING RoutingUpdates for RoutingUpdate from %s |||||" % (packet.src)
+                self.send_RoutingUpdates()
         else:
             # FORWARD THE PACKET CORRECTLY
             
@@ -101,7 +107,43 @@ class RIPRouter (Entity):
                 pass
             """
     
+    # Updates and determines if we need to send
+    # Returns TRUE if we NEED TO SEND ROUTING UPDATE
+    # FALSE OTHERWISE
     def recalculateMinDist(self):
+        new_paths = {}
+        new_forwarding_table = {}
+                
+        # For each RoutingUpdate:
+        for neighbor in self.neighbors_distances.keys():
+            new_paths[neighbor] = 1
+            new_forwarding_table[neighbor] = self.forwarding_table[neighbor]
+            
+            if self.neighbors_distances[neighbor] == {}:
+                pass
+            else:
+                # For each entry in the RoutingUpdate:
+                for dest in self.neighbors_distances[neighbor].keys():
+                    hop_count = self.neighbors_distances[neighbor][dest]
+                    distFromSelf = hop_count + 1
+                    
+                    # If we haven't entered it yet OR the current value is SMALLER:
+                    if not (dest in new_paths.keys()) or distFromSelf < new_paths[dest]:
+                        # Update
+                        new_paths[dest] = distFromSelf
+                        # The best path to DEST is THRU NEIGHBOR
+                        new_forwarding_table[dest] = self.forwarding_table[neighbor]
+                    elif distFromSelf == self.paths[dest]:
+                        # IS IT A TIE?  BREAK BY LOWER PORT ID
+                        current_port = new_forwarding_table[dest]
+                        new_port = self.forwarding_table[neighbor]
+                        
+                        new_forwarding_table[dest] = min(current_port, new_port)
+                    else:
+                        # Otherwise, no need to update
+                        pass
+        
+        """            
         for neighbor in self.neighbors_distances.keys():
             for dest in self.neighbors_distances[neighbor].keys():
                 hop_count = self.neighbors_distances[neighbor][dest]
@@ -115,7 +157,24 @@ class RIPRouter (Entity):
                     current_port = self.forwarding_table[dest]
                     new_port = self.forwarding_table[neighbor]
                     self.forwarding_table[dest] = min(current_port, new_port)
-    
+        """
+        
+        # IF ANYTHING CHANGED, WE NEED TO RETURN TRUE
+        
+        if self.DEBUG:
+            print "__________________________________________________________"
+            print "NEW paths: %s" % (new_paths)
+            print "NEW forwarding_table: %s" % (new_forwarding_table)
+            print "__________________________________________________________"
+        
+        
+        output = not (new_paths == self.paths and new_forwarding_table == self.forwarding_table) 
+        
+        self.paths = new_paths
+        self.forwarding_table = new_forwarding_table
+        
+        return output
+        
     
     #iterates over the forwarding table for a particular destination and reset the minum.  
     #Deletes the entry if no entries in forwarding table
@@ -138,24 +197,34 @@ class RIPRouter (Entity):
     # Send routing updates to neighbors (a list of neighbors, NOT PORTS)
     # NOTE: Please don't advertise a neighbor to himself, 
     # i.e. if A is connected to B, please don't include B in A's update to B.
-    def send_RoutingUpdates(self, neighbors):
+    def send_RoutingUpdates(self):
         # Because of the above constraint, we need to make each a routing update for
         # POISON REVERSE:
         # IF BEST ROUTE TO X IS THROUGH N
         # ADVERTISE X:100 TO N
-        for neighbor in neighbors:
+        for neighbor in self.neighbors_distances.keys():
             newRoutingUpdate = RoutingUpdate()                
             for dest in self.paths.keys():
+                # DO NOT ADVERTISE NEIGHBOR TO ITSELF
                 if dest != neighbor:
+                    
+                    if self.DEBUG:
+                        if not dest in self.forwarding_table.keys():
+                            print "dest: %s" % (dest)
+                        if not neighbor in self.forwarding_table.keys():
+                            print "neighbor: %s" % (neighbor)
+                        
                     if self.forwarding_table[dest] == self.forwarding_table[neighbor]:   
                         newRoutingUpdate.add_destination(dest, 100)
                     else:
                         newRoutingUpdate.add_destination(dest, self.paths[dest])
         
-            self.send(newRoutingUpdate, self.forwarding_table[neighbor])
             if self.DEBUG:
                 print "#~#~#~#~# Sending RoutingUpdates to %s" % neighbor
                 print "thru port: %s #~#~#~#~#" % self.forwarding_table[neighbor]
+            
+            self.send(newRoutingUpdate, self.forwarding_table[neighbor])
+
         
         
         

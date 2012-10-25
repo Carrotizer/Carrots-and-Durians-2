@@ -24,8 +24,8 @@ h1-- s1 -- s2 -- s3 --  h2
    \_  s7 _______ s8 _/
     
 Latency table:
-
-
+s1 - s2, s2 - s3:
+s4 - s5, s5 - s6:
 s7 - s8:
 
 Every other link has negligible latency, for simplicity
@@ -40,6 +40,6 @@ Everything else sends correctly 100% of the time, for simplicity
   
     
 Best path between h1 and h2
--By hop count: h1 -> s7 -> s8 -> h2
--By latencies:
--By packet loss/corruption rate
+-By hop count: h1 -> s7 -> s8 -> h2 (simple distance metric)
+-By latencies:				(the latencies are ADDED across the links)
+-By packet loss/corruption rate:      (the loss rates are MULTIPLIED across the links)
